@@ -88,6 +88,24 @@ REA로 배포된 AgentManager JavaScript도 살펴봤습니다. 내부 데몬은
 
 ## 문제 해결
 
+### 파일 작업 전 사전 점검
+
+```powershell
+py -3 doctor.py --folder 'C:\YourPrivateFolder'
+```
+
+이 명령은 입력 경로와 실제 경로, 폴더 존재 여부, 공식 CLI 연결, Guard/샌드박스, 저장된 폴더 허용 범위와 중립 REPL의 작업 폴더를 **읽기 전용으로** 확인합니다. 키·파일 내용은 읽지 않고 설정도 바꾸지 않습니다. 진단 결과에는 로컬 폴더 경로가 포함되므로 공개 이슈에 그대로 붙이지 마세요.
+
+**MSIX 경로 리디렉션도 확인하세요.** 패키지로 설치된 Codex에서 `AppData\Local\YourApp`에 만든 폴더가 실제로는 `AppData\Local\Packages\<package>\LocalCache\Local\YourApp`에 있을 수 있습니다. 다른 일반 데스크톱 앱은 원래 경로에서 그 폴더를 찾지 못할 수 있습니다. `requestedFolder`, `physicalFolder`, `pathRedirected`를 비교하고, 동일 폴더임을 확인한 실제 경로를 명시적으로 승인한 범위에 연결하세요. Windows 가상화·샌드박스를 해제하거나 다른 폴더까지 허용할 필요는 없습니다. [Microsoft 공식 설명](https://learn.microsoft.com/en-us/windows/msix/desktop/desktop-to-uwp-behind-the-scenes)
+
+**Windows ACL, Aside의 계정 폴더 허용, 프로젝트·세션 작업 폴더 경계는 별개입니다.** 2026-10-15 확인 시 계정 `writableRoots`에 폴더를 저장하고 재연결해도, 중립 REPL은 `Path escapes Project and session roots`로 거부할 수 있었습니다. 계정 권한 저장 성공을 실제 파일 저장 성공으로 취급하지 마세요.
+
+실제 경로가 승인 범위에 들어가는지 확인하고, 비밀 값이 없는 임시 파일을 **사용할 AI 작업에서** 쓰는 데 성공한 후 자격 증명을 저장하세요. 중립 REPL의 경계와 별도 AI 작업의 접근 범위는 같다고 가정하지 마세요. 실제 AI 작업에서도 경계 오류가 남으면 공식 [Working folder](https://docs.aside.com/help/tasks)에서 필요한 폴더만 지정하세요. 현재 이 프로젝트는 작업 폴더를 설정하는 문서화된 CLI 옵션을 확인하지 못했습니다. `doctor.py`는 실제 쓰기를 하지 않으므로 준비 완료를 주장하지 않으며 종료 코드 `2`를 반환합니다.
+
+실제 Windows 사례에서는 MSIX 리디렉션 후의 동일 폴더 경로를 공식 쓰기 허용에 연결하자, Guard·샌드박스를 유지한 채 새 AI 작업의 임시 파일 쓰기·삭제가 성공했습니다. 이것이 모든 파일 오류의 원인이라는 뜻은 아니며, 개별 경계는 계속 확인해야 합니다.
+
+Aside CLI는 `aside update`로 공식 업데이트할 수 있습니다. `1.26.1015.732`에서 연결 도움말과 유효한 Windows 게시자 서명을 확인했습니다. 업데이트만으로 폴더 경계 문제가 해결됐다고 검증한 것은 아닙니다. Full access 전환, 샌드박스 해제, ACL 전체 개방 또는 다른 API를 통한 거부 우회는 이 도구에서 수행하지 않습니다.
+
 - **CLI를 못 찾음:** 공식 Aside CLI를 설치하고 `aside --help`를 확인하세요.
 - **로그인/모델 오류:** Aside 계정 및 AI 제공자 설정을 확인하세요. 이 도구에 키를 붙여넣지 마세요.
 - **MCP가 안 보임:** Codex의 MCP 재연결 또는 새 대화를 사용하세요. 직접 CLI 호출은 즉시 가능합니다.
